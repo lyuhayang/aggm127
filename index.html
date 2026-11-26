@@ -759,6 +759,42 @@ function contactSheet(c){
 }
 
 /* ---------- kakao ---------- */
+const splitParts=(l,c)=>fill(l,c).split(' / ').map(x=>x.trim()).filter(Boolean);
+function pickUnseen(pool,c,recent){
+  S.seen=S.seen||{};
+  const key=l=>c.id+'|'+l;
+  let un=pool.filter(l=>!S.seen[key(l)]);
+  if(!un.length){pool.forEach(l=>{delete S.seen[key(l)]});un=pool.slice()}
+  let cand=un.filter(l=>!splitParts(l,c).some(p=>recent.includes(p)));
+  if(!cand.length)cand=un;
+  const l=pick(cand);S.seen[key(l)]=1;
+  return splitParts(l,c);
+}
+const ROUNDS_PER_DAY=5,ROUND_GAP=60*60e3;
+function proactive(){
+  if(!S||!Array.isArray(S.chars)||ui.chatOpen||ui.call)return;
+  const now=Date.now(),day=dkey(now);
+  const P=(S.prod&&S.prod.day===day)?S.prod:{day,n:0,last:0};
+  if(P.n>=ROUNDS_PER_DAY)return;
+  if(P.n>0&&now-P.last<ROUND_GAP)return;
+  P.n++;P.last=now;S.prod=P;
+  const total=S.chars.length*2;let k=0;
+  S.chars.forEach(c=>{
+    [false,true].forEach(SC=>{
+      const CHS=SC?'schats':'chats',UNR=SC?'sunread':'unread';
+      S[CHS]=S[CHS]||{};S[UNR]=S[UNR]||{};
+      const gen=((SC?c.sreplies:c.replies)||[]).filter(Boolean);k++;
+      if(!gen.length)return;
+      const recent=(S[CHS][c.id]||[]).filter(m=>m.from==='them').slice(-6).map(m=>m.text);
+      pickUnseen(gen,c,recent).forEach((t,j)=>{
+        (S[CHS][c.id]=S[CHS][c.id]||[]).push({id:uid(),from:'them',text:t,ts:now-(total-k)*1000+j*300});
+        S[UNR][c.id]=(S[UNR][c.id]||0)+1;
+      });
+    });
+  });
+  save();renderHome();
+  if((ui.app==='kakao'||ui.app==='school')&&ui.refresh)ui.refresh();
+}
 function appKakao(root,arg){return chatApp(root,arg,false)}
 function appSchool(root,arg){return chatApp(root,arg,true)}
 function chatApp(root,arg,SC){
@@ -863,9 +899,7 @@ function chatApp(root,arg,SC){
     else if(sit['모름']&&sit['모름'].length&&Math.random()<0.7)pool=sit['모름'];
     else pool=gen;
     if(!pool.length)pool=gen;if(!pool.length)return;
-    const parts=l=>fill(l,c).split(' / ').map(x=>x.trim()).filter(Boolean);
-    let cand=pool.filter(r=>!parts(r).some(p=>recent.includes(p)));if(!cand.length)cand=pool.filter(r=>!parts(r).some(p=>p===recent[recent.length-1]));if(!cand.length)cand=pool;
-    const bubbles=parts(pick(cand));
+    const bubbles=pickUnseen(pool,c,recent);
     const box=()=>$('#msgs',root);let n=0;
     function next(){
       const bx=box();let ty=null;
@@ -1216,7 +1250,7 @@ $('#wDday').onclick=()=>{
   const el=openSheet('<div class="sh-t">💌 응원 메시지</div><p style="font-size:16px;line-height:1.7;text-align:center;white-space:pre-wrap;margin-bottom:18px">'+esc(S.cheer)+'</p><div class="sh-b"><button class="b-ok">닫기</button></div>');
   $('.b-ok',el).onclick=closeSheet;
 };
-fit();applyWall();renderHome();tick();setInterval(tick,10000);
+fit();applyWall();renderHome();tick();setInterval(tick,10000);setTimeout(proactive,1500);setInterval(proactive,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)proactive()});
 /* 공유용 data.json 이 같은 폴더에 있으면 처음 방문 때 자동 적용 */
 fetch('data.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{
   if(!d||!d._ver||!Array.isArray(d.chars)||S._ver===d._ver)return;
