@@ -846,6 +846,7 @@ const schoolHours=t=>{const d=new Date(t),m=d.getHours()*60+d.getMinutes(),w=d.g
 function proactive(){
   if(!S||!Array.isArray(S.chars)||ui.chatOpen||ui.call)return;
   const now=Date.now(),day=dkey(now);
+  if(day===dkey(new Date(2026,10,28).getTime()))return; /* 시험 당일(11/28)은 정해 둔 E 멘트만 */
   const P=(S.prod&&S.prod.day===day)?S.prod:{day,n:0,last:0};
   if(P.n>=ROUNDS_PER_DAY)return;
   if(P.n>0&&now-P.last<ROUND_GAP)return;
